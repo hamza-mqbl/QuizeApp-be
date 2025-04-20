@@ -44,6 +44,10 @@ if (process.env.NODE_ENV !== "PRODUCTION") {
     path: "backend/config/.env",
   });
 }
+app.get("/is", (req, res) => {
+  res.send("Server is running!");
+});
+
 // Routes
 app.use("/api/quiz", quizRoutes);
 app.use("/api/result", resultRoutes);
