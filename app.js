@@ -3,7 +3,7 @@ const quizRoutes = require("./routes/quizRoutes");
 const resultRoutes = require("./routes/resultRoutes");
 const studentRoutes = require("./routes/studentRoutes");
 const teacherRoutes = require("./routes/teacherRoutes");
-
+const serverless = require("serverless-http");
 const connectDatabase = require("./db/Database");
 const ErrorHandler = require("./middleware/error");
 const cookieParser = require("cookie-parser");
@@ -50,3 +50,4 @@ app.use("/api/result", resultRoutes);
 app.use("/api/auth", studentRoutes);
 app.use("/api/teacher", teacherRoutes);
 module.exports = app;
+module.exports.handler = serverless(app);
