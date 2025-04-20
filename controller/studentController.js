@@ -74,29 +74,24 @@ exports.activateUser = catchAsyncErrors(async (req, res, next) => {
 // Login User (Student or Teacher)
 exports.loginUser = catchAsyncErrors(async (req, res, next) => {
   try {
-    const { email, password } = req.body;
-    console.log(
-      "🚀 ~ exports.loginUser=catchAsyncErrors ~  email, password:",
-      email,
-      password
-    );
-    if (!email || !password) {
-      console.log("🚀 ~ exports.loginUser=catchAsyncErrors ~ user:", user);
-      return next(new ErrorHandler("Please provide all fields!", 400));
+    const { email, password, role } = req.body;
+
+    if (!email || !password || !role) {
+      return next(
+        new ErrorHandler("Please provide email, password and role!", 400)
+      );
     }
 
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({ email, role }).select("+password");
     if (!user) {
-      return next(new ErrorHandler("User doesn't exist!", 400));
+      return next(new ErrorHandler("User with this role doesn't exist!", 400));
     }
 
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       return next(new ErrorHandler("Invalid credentials", 400));
     }
-    // res.status(200).json({
-    //   user,
-    // });
+
     sendToken(user, 201, res);
   } catch (error) {
     return next(new ErrorHandler(error.message, 500));
