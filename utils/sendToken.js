@@ -1,3 +1,4 @@
+const jwt = require("jsonwebtoken");
 const sendToken = (userId, statuscode, res) => {
   const token = jwt.sign({ id: userId }, process.env.JWT_SECRET_KEY, {
     expiresIn: process.env.JWT_EXPIRES,
@@ -15,3 +16,4 @@ const sendToken = (userId, statuscode, res) => {
     token,
   });
 };
+module.exports = sendToken;
