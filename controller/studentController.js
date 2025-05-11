@@ -106,7 +106,7 @@ exports.getUser = async (req, res) => {
     }
 
     const decoded = jwt.verify(user_token, process.env.JWT_SECRET_KEY);
-    const user = await User.findById(decoded.id);
+    const user = await User.findById(decoded.id).select("+password");
 
     if (!user) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -187,4 +187,66 @@ const createActivationToken = (user) => {
     process.env.ACTIVATION_SECRET,
     { expiresIn: "1h" }
   );
+};
+
+const bcrypt = require("bcrypt");
+
+// Update user name/email and/or password
+exports.updateProfileOrPassword = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+
+    const { name, email, currentPassword, newPassword, confirmPassword } =
+      req.body;
+
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+      return next(new ErrorHandler("User not found", 404));
+    }
+
+    // Profile info update
+    if (name || email) {
+      if (name) user.name = name;
+      if (email) user.email = email;
+    }
+
+    // Password update
+    if (currentPassword || newPassword || confirmPassword) {
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        return next(new ErrorHandler("All password fields are required", 400));
+      }
+
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) {
+        return next(new ErrorHandler("Current password is incorrect", 401));
+      }
+
+      if (newPassword !== confirmPassword) {
+        return next(new ErrorHandler("New passwords do not match", 400));
+      }
+
+      if (newPassword.length < 8) {
+        return next(
+          new ErrorHandler("New password must be at least 8 characters", 400)
+        );
+      }
+
+      user.password = newPassword;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Account updated successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    return next(new ErrorHandler(error.message, 500));
+  }
 };

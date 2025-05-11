@@ -8,7 +8,8 @@ const {
   getUser, // Get user data (for both students and teachers)
   logoutUser, // Logout user (for both students and teachers)
   updateUserInfo, // Update user info (for both students and teachers)
-  updateUserAvatar, // Update user avatar (for both students and teachers)
+  updateUserAvatar,
+  updateProfileOrPassword, // Update user avatar (for both students and teachers)
 } = require("../controller/studentController"); // Modify to generic user controller
 const multer = require("multer");
 
@@ -35,5 +36,6 @@ router.put(
   upload.single("avatar"),
   updateUserAvatar
 );
+router.put("/update-profile", isAuthenticated, updateProfileOrPassword);
 
 module.exports = router;

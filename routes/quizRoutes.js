@@ -72,4 +72,10 @@ router.get(
   isAuthenticated,
   quizController.getStudentDetails
 );
+router.get(
+  "/students/result-overview/:id",
+  isAuthenticated,
+  quizController.getStudentResultOverview
+);
+
 module.exports = router;
