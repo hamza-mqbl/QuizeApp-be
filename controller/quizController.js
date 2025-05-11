@@ -465,7 +465,7 @@ exports.updateQuiz = async (req, res, next) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-
+// get all student by teacher id
 exports.getMyStudents = async (req, res, next) => {
   try {
     if (req.user.role !== "teacher") {
@@ -532,7 +532,110 @@ exports.getMyStudents = async (req, res, next) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-// GET /api/quiz/students/performance
+// get student details by studentID
+exports.getStudentDetails = async (req, res, next) => {
+  try {
+    const studentId = req.params.id;
+    const teacherId = req.user._id;
+
+    // Get all quizzes created by this teacher
+    const quizzes = await Quiz.find({ createdBy: teacherId });
+
+    let performanceStats = {
+      totalScore: 0,
+      quizzesTaken: 0,
+      highestScore: 0,
+      lowestScore: null,
+      totalDurationMinutes: 0, // Optional if you're tracking time
+    };
+
+    const subjectStats = {};
+
+    quizzes.forEach((quiz) => {
+      const submission = quiz.submissions.find(
+        (sub) => sub.studentId.toString() === studentId
+      );
+
+      if (submission) {
+        const score = submission.score;
+        const total = quiz.questions.length;
+        const percentScore = Math.round((score / total) * 100);
+
+        performanceStats.totalScore += percentScore;
+        performanceStats.quizzesTaken += 1;
+        performanceStats.highestScore = Math.max(
+          performanceStats.highestScore,
+          percentScore
+        );
+        if (performanceStats.lowestScore === null) {
+          performanceStats.lowestScore = percentScore;
+        } else {
+          performanceStats.lowestScore = Math.min(
+            performanceStats.lowestScore,
+            percentScore
+          );
+        }
+
+        const topic = quiz.topic;
+        if (!subjectStats[topic]) {
+          subjectStats[topic] = {
+            total: 0,
+            count: 0,
+          };
+        }
+        subjectStats[topic].total += percentScore;
+        subjectStats[topic].count += 1;
+      }
+    });
+
+    const student = await User.findById(studentId).select(
+      "name email phoneNumber createdAt"
+    );
+
+    const subjects = Object.entries(subjectStats).map(([name, data]) => ({
+      name,
+      avgScore: Math.round(data.total / data.count),
+      quizzesTaken: data.count,
+    }));
+
+    const avgScore = performanceStats.quizzesTaken
+      ? Math.round(performanceStats.totalScore / performanceStats.quizzesTaken)
+      : 0;
+
+    res.status(200).json({
+      success: true,
+      student: {
+        id: student._id,
+        name: student.name,
+        email: student.email,
+        phone: student.phoneNumber || null,
+        joinedDate: student.createdAt,
+        lastActive: new Date(), // Optional: or use latest quiz timestamp
+        status:
+          (new Date() - new Date(student.createdAt)) / (1000 * 60 * 60 * 24) >
+          14
+            ? "inactive"
+            : "active",
+        profileImage: null,
+        performance: {
+          quizzesTaken: performanceStats.quizzesTaken,
+          quizzesCompleted: performanceStats.quizzesTaken,
+          avgScore,
+          highestScore: performanceStats.highestScore,
+          lowestScore: performanceStats.lowestScore || 0,
+          totalTimeSpent: "N/A", // replace if you store time
+          avgTimePerQuiz: "N/A", // replace if you store time
+        },
+        subjects,
+      },
+    });
+  } catch (err) {
+    console.error("Error getting student details:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// get all subject performance by teacher id
 exports.getSubjectPerformance = async (req, res, next) => {
   try {
     if (req.user.role !== "teacher") {
