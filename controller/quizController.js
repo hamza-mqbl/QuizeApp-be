@@ -869,6 +869,104 @@ exports.getStudentProgress = async (req, res) => {
   }
 };
 
+// getStudentResultInformation by studentId
+exports.getStudentResultOverview = async (req, res, next) => {
+  try {
+    const studentId = req.params.id;
+    const teacherId = req.user._id;
+
+    const quizzes = await Quiz.find({ createdBy: teacherId }).lean();
+
+    const student = await User.findById(studentId)
+      .select("name email phoneNumber createdAt")
+      .lean();
+    if (!student) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Student not found" });
+    }
+
+    const submissions = [];
+
+    let totalScore = 0;
+    let highestScore = 0;
+    let lowestScore = null;
+
+    quizzes.forEach((quiz) => {
+      const sub = quiz.submissions.find(
+        (s) => s.studentId.toString() === studentId
+      );
+
+      if (!sub) return;
+
+      const totalQuestions = quiz.questions.length;
+      const scorePercent = Math.round((sub.score / totalQuestions) * 100);
+      totalScore += scorePercent;
+      highestScore = Math.max(highestScore, scorePercent);
+      if (lowestScore === null) {
+        lowestScore = scorePercent;
+      } else {
+        lowestScore = Math.min(lowestScore, scorePercent);
+      }
+
+      submissions.push({
+        id: sub._id,
+        quizName: quiz.title,
+        subject: quiz.topic,
+        score: scorePercent,
+        maxScore: 100,
+        correctAnswers: sub.score,
+        totalQuestions,
+        timeSpent: "N/A", // Add if stored
+        completedAt: quiz.createdAt,
+        status: "completed", // assuming all shown are completed
+      });
+    });
+
+    const performance = {
+      quizzesTaken: submissions.length,
+      quizzesCompleted: submissions.length,
+      avgScore: submissions.length
+        ? Math.round(totalScore / submissions.length)
+        : 0,
+      highestScore,
+      lowestScore: lowestScore || 0,
+    };
+
+    // Optional: build subject-wise summary
+    const subjectMap = {};
+    submissions.forEach((s) => {
+      if (!subjectMap[s.subject]) {
+        subjectMap[s.subject] = { total: 0, count: 0 };
+      }
+      subjectMap[s.subject].total += s.score;
+      subjectMap[s.subject].count += 1;
+    });
+
+    const subjects = Object.entries(subjectMap).map(([name, stats]) => ({
+      name,
+      avgScore: Math.round(stats.total / stats.count),
+      quizzesTaken: stats.count,
+    }));
+
+    res.status(200).json({
+      success: true,
+      student: {
+        id: student._id,
+        name: student.name,
+        email: student.email,
+        profileImage: null,
+        performance,
+        subjects,
+      },
+      quizResults: submissions,
+    });
+  } catch (err) {
+    console.error("getStudentResultOverview error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 // student quizes
 
 // GET all published quizzes (for students)
