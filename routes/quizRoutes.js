@@ -6,6 +6,35 @@ const { isAuthenticated } = require("../middleware/auth");
 
 // Create quiz (teacher only)
 router.post("/create", isAuthenticated, quizController.createQuiz);
+router.get(
+  "/getTeacherDashboardStats",
+  isAuthenticated,
+  quizController.getTeacherDashboardStats
+);
+router.get(
+  "/students/my-students",
+  isAuthenticated,
+  quizController.getMyStudents
+);
+router.get(
+  "/students/performance/:studentId",
+  isAuthenticated,
+  quizController.getStudentPerformance
+);
+router.get(
+  "/subjects-performance",
+  isAuthenticated,
+  quizController.getSubjectPerformance
+);
+router.get(
+  "/students/activity-log",
+  isAuthenticated,
+  quizController.getStudentActivityLog
+);
+
+router.get("/get-my-quiz/:id", isAuthenticated, quizController.getQuizById); //get single quize by quiz id and teacher id
+router.put("/update-my-quiz/:id", isAuthenticated, quizController.updateQuiz); //get single quize by quiz id and teacher id
+
 router.get("/my-quizzes", isAuthenticated, quizController.getMyQuizzes);
 router.put("/publish/:quizId", isAuthenticated, quizController.publishQuiz); // ✅ new publish route
 router.post("/submit/:quizId", isAuthenticated, quizController.submitQuiz);
