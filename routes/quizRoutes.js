@@ -6,6 +6,8 @@ const { isAuthenticated } = require("../middleware/auth");
 
 // Create quiz (teacher only)
 router.post("/create", isAuthenticated, quizController.createQuiz);
+router.post("/generate", quizController.generateQuiz);
+
 router.get(
   "/getTeacherDashboardStats",
   isAuthenticated,

@@ -2,7 +2,14 @@ const Quiz = require("../models/Quiz");
 const { generateQuizFromPrompt } = require("../services/quizService");
 const ErrorHandler = require("../utils/ErrorHandler");
 const User = require("../models/student"); // ✅ Make sure you have this model imported
+const { OpenAI } = require("openai");
 
+const openai = new OpenAI({
+  // apiKey: process.env.OPENAI_API_KEY,
+  apiKey:
+    "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",
+});
+// console.log("🚀 ~ process.env.OPENAI_API_KEY:", process.env.OPENAI_API_KEY);
 exports.createQuiz = async (req, res, next) => {
   if (req.user.role !== "teacher") {
     return next(
@@ -152,23 +159,47 @@ exports.getQuizResults = async (req, res, next) => {
 };
 
 exports.generateQuiz = async (req, res) => {
+  const { topic, numberOfQuestions } = req.body;
+  console.log(
+    "🚀 ~ exports.generateQuiz= ~ topic, numberOfQuestions :",
+    topic,
+    numberOfQuestions
+  );
+
+  if (!topic || !numberOfQuestions) {
+    return res
+      .status(400)
+      .json({ message: "Topic and numberOfQuestions are required." });
+  }
+
+  const prompt = `
+Generate ${numberOfQuestions} multiple choice questions on the topic "${topic}".
+Each question must be in this format:
+{
+  "questionText": "string",
+  "options": ["option1", "option2", "option3", "option4"],
+  "correctAnswer": "one of the options"
+}
+Return only the JSON array. No explanation or extra text.
+`;
+
   try {
-    const { topic, numberOfQuestions } = req.body;
-    console.log("🚀 ~ exports.generateQuiz= ~ req.body:", req.body);
-    const questions = await generateQuizFromPrompt(topic, numberOfQuestions); // Integrate Hugging Face here
-    const quiz = new Quiz({
-      title: `AI Generated Quiz on ${topic}`,
-      topic,
-      questions,
-      createdBy: req.user.id,
-      quizCode: generateUniqueCode(),
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4",
+      temperature: 0.7,
+      messages: [{ role: "user", content: prompt }],
     });
-    await quiz.save();
-    res.status(201).json(quiz);
+
+    const content = completion.choices[0].message?.content || "[]";
+    const parsed = JSON.parse(content);
+    console.log("🚀 ~ exports.generateQuiz= ~ parsed:", parsed);
+    return res.status(200).json({ questions: parsed });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("OpenAI Error:", error.message);
+    return res.status(500).json({ message: "Failed to generate quiz." });
   }
 };
+
 exports.getQuizByCode = async (req, res, next) => {
   try {
     const quiz = await Quiz.findOne({
