@@ -3,11 +3,9 @@ const { generateQuizFromPrompt } = require("../services/quizService");
 const ErrorHandler = require("../utils/ErrorHandler");
 const User = require("../models/student"); // ✅ Make sure you have this model imported
 const { OpenAI } = require("openai");
-
+require("dotenv").config({ path: "./config/.env" });
 const openai = new OpenAI({
-  // apiKey: process.env.OPENAI_API_KEY,
-  apiKey:
-    "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",
+  apiKey: process.env.OPENAI_API_KEY,
 });
 // console.log("🚀 ~ process.env.OPENAI_API_KEY:", process.env.OPENAI_API_KEY);
 exports.createQuiz = async (req, res, next) => {
@@ -182,10 +180,9 @@ Each question must be in this format:
 }
 Return only the JSON array. No explanation or extra text.
 `;
-
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o-mini",
       temperature: 0.7,
       messages: [{ role: "user", content: prompt }],
     });
