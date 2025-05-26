@@ -1,37 +1,29 @@
 const express = require("express");
-const serverless = require("serverless-http");
-const connectDatabase = require("./db/Database");
 const quizRoutes = require("./routes/quizRoutes");
 const resultRoutes = require("./routes/resultRoutes");
 const studentRoutes = require("./routes/studentRoutes");
 const teacherRoutes = require("./routes/teacherRoutes");
+const serverless = require("serverless-http");
+const connectDatabase = require("./db/Database");
+const ErrorHandler = require("./middleware/error");
 const cookieParser = require("cookie-parser");
-const cors = require("cors");
-const bodyParser = require("body-parser");
-
-// Connect DB
-connectDatabase();
 
 const app = express();
-
-// Middleware
 app.use(express.json());
 app.use(cookieParser());
-app.use(bodyParser.json({ limit: "50mb" }));
-app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
 
+const bodyParser = require("body-parser");
+const cors = require("cors");
 const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:8000",
-  "http://13.60.95.182:8000",
+  "http://localhost:3000", // Local development
   "https://quiz-app-three-plum.vercel.app",
   "https://quiz-app-zdp4.vercel.app",
 ];
-
+// Middleware
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
         callback(new Error("Not allowed by CORS"));
@@ -40,18 +32,25 @@ app.use(
     credentials: true,
   })
 );
+app.use("/", express.static("uploads")); //setup done for 2nd branch
+// Increase the payload size limit
+app.use(bodyParser.json({ limit: "50mb" })); // Increase limit as needed
+app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
 
-// Optional health check
+// config
+if (process.env.NODE_ENV !== "PRODUCTION") {
+  require("dotenv").config({
+    path: "backend/config/.env",
+  });
+}
 app.get("/is", (req, res) => {
   res.send("Server is running!");
 });
 
-// API routes
+// Routes
 app.use("/api/quiz", quizRoutes);
 app.use("/api/result", resultRoutes);
 app.use("/api/auth", studentRoutes);
 app.use("/api/teacher", teacherRoutes);
-
-// Export for Vercel
-const handler = serverless(app);
-module.exports = { handler };
+module.exports = app;
+module.exports.handler = serverless(app);
