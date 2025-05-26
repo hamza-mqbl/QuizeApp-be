@@ -19,6 +19,7 @@ const allowedOrigins = [
   "http://localhost:8000", // Local development
   "http://13.60.95.182:8000",
   "https://quiz-app-three-plum.vercel.app",
+  "https://quiz-app-zdp4.vercel.app"
 ];
 // Middleware
 app.use(
