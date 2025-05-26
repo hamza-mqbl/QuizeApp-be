@@ -6,11 +6,21 @@ const SubmissionSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
-  answers: [{ type: String, required: true }], // Stores selected answers
-  score: { type: Number, required: true }, // Stores student's score
-  resultPublished: { type: Boolean, default: false }, // Marks if results are published
+  answers: [
+    {
+      type: String,
+      // required: true,
+      default: "", // Default to empty string
+      validate: {
+        validator: (value) => typeof value === "string", // Allow empty strings
+        message: "Answer must be a string",
+      },
+    },
+  ],
+  score: { type: Number, required: true },
+  resultPublished: { type: Boolean, default: false },
+  feedback: { type: String, default: null },
 });
-
 const QuizSchema = new mongoose.Schema({
   title: { type: String, required: true },
   topic: { type: String, required: true },

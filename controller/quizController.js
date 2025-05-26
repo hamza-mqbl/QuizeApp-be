@@ -3,6 +3,7 @@ const { generateQuizFromPrompt } = require("../services/quizService");
 const ErrorHandler = require("../utils/ErrorHandler");
 const User = require("../models/student"); // ✅ Make sure you have this model imported
 const { OpenAI } = require("openai");
+const { generateFeedback } = require("../services/feedbackService");
 require("dotenv").config({ path: "./config/.env" });
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -1039,27 +1040,42 @@ exports.submitQuiz = async (req, res, next) => {
       });
     }
 
+    // Sanitize answers to ensure all elements are strings
+    const sanitizedAnswers = answers.map((answer) =>
+      typeof answer === "string" ? answer.trim() : ""
+    );
+    console.log("Sanitized answers:", sanitizedAnswers); // Debug log
+
     // Calculate Score
     let score = 0;
     quiz.questions.forEach((question, index) => {
-      const studentAnswer = answers[index]?.trim() || "";
+      const studentAnswer = sanitizedAnswers[index];
       if (studentAnswer && studentAnswer === question.correctAnswer) {
         score++;
       }
     });
 
     // Save Submission
-    quiz.submissions.push({
+    const submission = {
       studentId,
-      answers,
+      answers: sanitizedAnswers,
       score,
       resultPublished: false,
-    });
+    };
+    quiz.submissions.push(submission);
     await quiz.save();
 
-    res
-      .status(201)
-      .json({ success: true, message: "Quiz submitted successfully", score });
+    // Generate and save feedback
+    const feedback = await generateFeedback(quiz, sanitizedAnswers, score);
+    submission.feedback = feedback;
+    await quiz.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Quiz submitted successfully",
+      score,
+      feedback,
+    });
   } catch (error) {
     console.error(error);
     return next(new ErrorHandler(error.message, 400));
