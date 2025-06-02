@@ -48,7 +48,7 @@ router.put(
 router.get("/results/:quizId", isAuthenticated, quizController.getQuizResults);
 
 // Generate quiz using AI (teacher only)
-// router.post("/generate", authMiddleware, quizController.generateQuiz);
+router.post("/generate", authMiddleware, quizController.generateQuiz);
 
 // Get quiz by code (student access)
 

@@ -12,7 +12,7 @@ const SubmissionSchema = new mongoose.Schema({
       // required: true,
       default: "", // Default to empty string
       validate: {
-        validator: (value) => typeof value === "string", // Allow empty strings
+        validator: (value) => typeof value === "string",
         message: "Answer must be a string",
       },
     },
@@ -38,6 +38,7 @@ const QuizSchema = new mongoose.Schema({
   },
   quizCode: { type: String, unique: true, required: true },
   submissions: [SubmissionSchema],
+  isSubmit: { type: Boolean, default: false }, // ✅ NEW FIELD
   isPublished: { type: Boolean, default: false }, // ✅ NEW FIELD
   resultsPublished: { type: Boolean, default: false }, // ✅ new field
   createdAt: { type: Date, default: Date.now },

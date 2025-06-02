@@ -31,3 +31,10 @@ exports.isAuthenticated = catchAsyncErrors(async (req, res, next) => {
   req.user = user; // ✅ Attach user directly
   next();
 });
+
+exports.isAdmin = async (req, res, next) => {
+  if (!req.user || req.user.role !== "admin") {
+    return next(new ErrorHandler("Access denied: Admins only", 403));
+  }
+  next();
+};

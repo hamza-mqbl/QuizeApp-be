@@ -6,10 +6,6 @@ const generateFeedback = async (quiz, answers, score) => {
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
-  console.log(
-    "🚀 ~ generateFeedback ~ process.env.OPENAI_API_KEY:",
-    process.env.OPENAI_API_KEY
-  );
   const answerAnalysis = [];
   quiz.questions.forEach((question, index) => {
     const studentAnswer = answers[index]?.trim() || "";
@@ -48,6 +44,7 @@ const generateFeedback = async (quiz, answers, score) => {
     messages: [{ role: "user", content: prompt }],
     max_tokens: 500,
   });
+  console.log("🚀 ~ generateFeedback ~ response:", response);
 
   return response.choices[0].message.content;
 };

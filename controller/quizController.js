@@ -181,6 +181,7 @@ Each question must be in this format:
 }
 Return only the JSON array. No explanation or extra text.
 `;
+
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -188,10 +189,20 @@ Return only the JSON array. No explanation or extra text.
       messages: [{ role: "user", content: prompt }],
     });
 
-    const content = completion.choices[0].message?.content || "[]";
-    const parsed = JSON.parse(content);
-    console.log("🚀 ~ exports.generateQuiz= ~ parsed:", parsed);
-    return res.status(200).json({ questions: parsed });
+    let content = completion.choices[0].message?.content || "[]";
+    console.log("🚀 ~ exports.generateQuiz= ~ content:", content);
+
+    // Sanitize content to ensure it's valid JSON
+    content = content.replace(/^`{3}json\n|`{3}$/g, ""); // Remove the backticks and "json" block wrapper if present
+
+    try {
+      const parsed = JSON.parse(content);
+      console.log("🚀 ~ exports.generateQuiz= ~ parsed:", parsed);
+      return res.status(200).json({ questions: parsed });
+    } catch (error) {
+      console.error("JSON Parsing Error:", error.message);
+      return res.status(500).json({ message: "Failed to parse quiz content." });
+    }
   } catch (error) {
     console.error("OpenAI Error:", error.message);
     return res.status(500).json({ message: "Failed to generate quiz." });
@@ -501,27 +512,30 @@ exports.getMyStudents = async (req, res, next) => {
       return next(new ErrorHandler("Access denied", 403));
     }
 
+    // Get all quizzes created by the teacher
     const quizzes = await Quiz.find({ createdBy: req.user._id });
+
     const studentStats = new Map();
 
     quizzes.forEach((quiz) => {
+      const questionCount = quiz.questions.length;
+
       quiz.submissions.forEach((submission) => {
         const sid = submission.studentId.toString();
-        const questionCount = quiz.questions.length;
+        const percentScore = (submission.score / questionCount) * 100;
 
         if (!studentStats.has(sid)) {
           studentStats.set(sid, {
             quizzesTaken: 0,
-            totalScore: 0,
-            totalQuestions: 0,
+            totalPercentScore: 0,
             lastActive: quiz.createdAt,
           });
         }
 
         const stat = studentStats.get(sid);
         stat.quizzesTaken += 1;
-        stat.totalScore += submission.score;
-        stat.totalQuestions += questionCount;
+        stat.totalPercentScore += percentScore;
+
         if (quiz.createdAt > stat.lastActive) {
           stat.lastActive = quiz.createdAt;
         }
@@ -535,9 +549,10 @@ exports.getMyStudents = async (req, res, next) => {
 
     const students = users.map((user) => {
       const stat = studentStats.get(user._id.toString());
+
       const avgScore =
-        stat.totalQuestions > 0
-          ? Math.round((stat.totalScore / stat.totalQuestions) * 100)
+        stat.quizzesTaken > 0
+          ? Math.round(stat.totalPercentScore / stat.quizzesTaken)
           : 0;
 
       return {
@@ -561,6 +576,7 @@ exports.getMyStudents = async (req, res, next) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
 // get student details by studentID
 exports.getStudentDetails = async (req, res, next) => {
   try {
@@ -1001,9 +1017,14 @@ exports.getStudentResultOverview = async (req, res, next) => {
 // GET all published quizzes (for students)
 exports.getAllPublishedQuizzes = async (req, res, next) => {
   try {
-    const quizzes = await Quiz.find({ isPublished: true })
-      .select("title topic questions createdAt quizCode") // Select only needed fields
-      .sort({ createdAt: -1 }); // latest first
+    const quizzes = await Quiz.find({
+      isPublished: true,
+      resultsPublished: false,
+      isSubmit: false,
+    })
+      .select("title topic questions createdAt quizCode createdBy")
+      .populate("createdBy", "name email") // Get teacher's details
+      .sort({ createdAt: -1 });
 
     res.status(200).json({ success: true, quizzes });
   } catch (error) {
@@ -1044,7 +1065,7 @@ exports.submitQuiz = async (req, res, next) => {
     const sanitizedAnswers = answers.map((answer) =>
       typeof answer === "string" ? answer.trim() : ""
     );
-    console.log("Sanitized answers:", sanitizedAnswers); // Debug log
+    // console.log("Sanitized answers:", sanitizedAnswers); // Debug log
 
     // Calculate Score
     let score = 0;
@@ -1055,19 +1076,24 @@ exports.submitQuiz = async (req, res, next) => {
       }
     });
 
-    // Save Submission
+    // Generate feedback
+    const feedback = await generateFeedback(quiz, sanitizedAnswers, score);
+    console.log("🚀 ~ exports.submitQuiz= ~ feedback:", feedback);
+
+    // Create submission object with feedback BEFORE pushing to array
     const submission = {
       studentId,
       answers: sanitizedAnswers,
       score,
       resultPublished: false,
+      feedback: feedback, // Set feedback here
     };
-    quiz.submissions.push(submission);
-    await quiz.save();
+    console.log("🚀 ~ exports.submitQuiz= ~ submission:", submission);
 
-    // Generate and save feedback
-    const feedback = await generateFeedback(quiz, sanitizedAnswers, score);
-    submission.feedback = feedback;
+    // Now push the complete submission to the array
+    quiz.submissions.push(submission);
+    quiz.isSubmit = true;
+
     await quiz.save();
 
     res.status(201).json({
@@ -1086,32 +1112,40 @@ exports.getStudentRecentResults = async (req, res, next) => {
     const studentId = req.user._id.toString();
 
     const quizzes = await Quiz.find({ "submissions.studentId": studentId })
-      .select("title createdAt submissions questions") // ✅ include questions
+      .select("title createdAt topic submissions questions createdBy")
+      .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
-    console.log("🚀 ~ exports.getStudentRecentResults= ~ quizzes:", quizzes);
 
     const results = [];
-    console.log("🚀 ~ exports.getStudentRecentResults= ~ results:", results);
 
     quizzes.forEach((quiz) => {
       const submission = quiz.submissions.find(
         (sub) =>
           sub.studentId.toString() === studentId && sub.resultPublished === true
       );
-      console.log("🚀 ~ quizzes.forEach ~ submission:", submission);
 
       if (submission) {
+        const totalQuestions = quiz.questions.length;
+
+        // Calculate correct answers
+        let correctAnswers = 0;
+        quiz.questions.forEach((q, i) => {
+          if (submission.answers[i] === q.correctAnswer) {
+            correctAnswers++;
+          }
+        });
+        console.log("🚀 ~ quizzes.forEach ~ correctAnswers:", correctAnswers);
+
         results.push({
           id: quiz._id,
           title: quiz.title,
-          score: `${Math.round(
-            (submission.score / quiz.questions.length) * 100
-          )}%`,
+          topic: quiz.topic,
+          teacher: quiz.createdBy?.name,
+          score: `${Math.round((submission.score / totalQuestions) * 100)}%`,
+          correctAnswers,
+          totalQuestions,
           date: quiz.createdAt.toISOString().split("T")[0],
-          status:
-            submission.score >= quiz.questions.length * 0.6
-              ? "passed"
-              : "failed",
+          status: correctAnswers >= totalQuestions * 0.6 ? "passed" : "failed",
         });
       }
     });
@@ -1145,15 +1179,13 @@ exports.getStudentQuizDetails = async (req, res, next) => {
       return res.status(403).json({ message: "Results not published yet" });
     }
 
-    const detailedResults = quiz.questions.map((question, index) => {
-      return {
-        questionText: question.questionText,
-        options: question.options,
-        correctAnswer: question.correctAnswer,
-        studentAnswer: submission.answers[index] || "Not answered",
-        isCorrect: submission.answers[index] === question.correctAnswer,
-      };
-    });
+    const detailedResults = quiz.questions.map((question, index) => ({
+      questionText: question.questionText,
+      options: question.options,
+      correctAnswer: question.correctAnswer,
+      studentAnswer: submission.answers[index] || "Not answered",
+      isCorrect: submission.answers[index] === question.correctAnswer,
+    }));
 
     res.status(200).json({
       success: true,
@@ -1162,9 +1194,41 @@ exports.getStudentQuizDetails = async (req, res, next) => {
       totalQuestions: quiz.questions.length,
       correctAnswers: submission.score,
       questions: detailedResults,
+      feedback: submission.feedback || "nothing found", // ✅ Added this line
     });
   } catch (error) {
     console.error(error);
     return next(new ErrorHandler(error.message, 400));
+  }
+};
+
+exports.updatePassword = async (req, res, next) => {
+  try {
+    const userId = req.user._id; // assuming user is authenticated
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (newPassword !== confirmPassword) {
+      return next(new ErrorHandler("New passwords do not match", 400));
+    }
+
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+      return next(new ErrorHandler("User not found", 404));
+    }
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return next(new ErrorHandler("Current password is incorrect", 401));
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Password updated successfully",
+    });
+  } catch (error) {
+    return next(new ErrorHandler(error.message, 500));
   }
 };

@@ -9,9 +9,13 @@ const {
   logoutUser, // Logout user (for both students and teachers)
   updateUserInfo, // Update user info (for both students and teachers)
   updateUserAvatar,
-  updateProfileOrPassword, // Update user avatar (for both students and teachers)
+  updateProfileOrPassword,
+  deleteUserAccount,
+  forgotPassword,
+  resetPassword, // Update user avatar (for both students and teachers)
 } = require("../controller/studentController"); // Modify to generic user controller
 const multer = require("multer");
+const { updatePassword } = require("../controller/quizController");
 
 // Set up multer for file uploads
 const storage = multer.memoryStorage();
@@ -24,10 +28,11 @@ router.post("/login-user", loginUser); // User login
 
 // Routes for getting user data, logging out, and updating info or avatar
 router.get("/getuser", isAuthenticated, getUser); // Fetch user data (student/teacher)
-router.get("/logout", logoutUser); // Logout user
+router.post("/logout", logoutUser); // Logout user
 
 // Update user info (student or teacher)
 router.put("/update-user-info", isAuthenticated, updateUserInfo);
+router.put("/user/update-password", isAuthenticated, updatePassword);
 
 // Update user avatar (student or teacher)
 router.put(
@@ -37,5 +42,10 @@ router.put(
   updateUserAvatar
 );
 router.put("/update-profile", isAuthenticated, updateProfileOrPassword);
+router.post("/logout", isAuthenticated, logoutUser);
+router.delete("/delete-account", isAuthenticated, deleteUserAccount);
+
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password/:token", resetPassword);
 
 module.exports = router;

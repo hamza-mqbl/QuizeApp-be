@@ -250,3 +250,118 @@ exports.updateProfileOrPassword = async (req, res, next) => {
     return next(new ErrorHandler(error.message, 500));
   }
 };
+// Logout User (Student or Teacher)
+exports.logoutUser = catchAsyncErrors(async (req, res, next) => {
+  try {
+    // Clear the same cookie used for authentication, typically "user_token"
+    res.cookie("user_token", "", {
+      httpOnly: true,
+      expires: new Date(0), // expire immediately
+      sameSite: "none", // set according to your frontend setup
+      secure: true, // ensure you're using HTTPS in production
+    });
+
+    res
+      .status(200)
+      .json({ success: true, message: "Logged out successfully." });
+  } catch (error) {
+    return next(new ErrorHandler(error.message, 500));
+  }
+});
+
+exports.deleteUserAccount = catchAsyncErrors(async (req, res, next) => {
+  try {
+    const userId = req.user._id; // assuming you're using JWT & `isAuthenticated` middleware
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(new ErrorHandler("User not found", 404));
+    }
+
+    await user.deleteOne();
+
+    res.cookie("user_token", "", {
+      httpOnly: true,
+      expires: new Date(0),
+      sameSite: "none",
+      secure: true,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Account deleted successfully.",
+    });
+  } catch (error) {
+    return next(new ErrorHandler(error.message, 500));
+  }
+});
+
+const crypto = require("crypto");
+
+exports.forgotPassword = catchAsyncErrors(async (req, res, next) => {
+  const user = await User.findOne({ email: req.body.email });
+
+  console.log("🚀 ~ exports.forgotPassword=catchAsyncErrors ~ user:", user);
+  if (!user) {
+    return next(new ErrorHandler("User not found", 404));
+  }
+
+  const resetToken = crypto.randomBytes(32).toString("hex");
+
+  user.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+  user.resetPasswordTime = Date.now() + 15 * 60 * 1000; // 15 minutes
+
+  await user.save({ validateBeforeSave: false });
+
+  const resetUrl = `http://localhost:3000/reset-password/${resetToken}`;
+
+  await sendMail({
+    email: user.email,
+    subject: "Password Reset",
+    message: `Click the link to reset your password: ${resetUrl}`,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: `Password reset email sent to ${user.email}`,
+  });
+});
+
+exports.resetPassword = catchAsyncErrors(async (req, res, next) => {
+  const resetToken = req.params.token;
+
+  const hashedToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  const user = await User.findOne({
+    resetPasswordToken: hashedToken,
+    resetPasswordTime: { $gt: Date.now() },
+  });
+  console.log("🚀 ~ exports.resetPassword=catchAsyncErrors ~ user:", user);
+
+  if (!user) {
+    return next(new ErrorHandler("Token is invalid or has expired", 400));
+  }
+
+  const { newPassword, confirmPassword } = req.body;
+
+  if (newPassword !== confirmPassword) {
+    return next(new ErrorHandler("Passwords do not match", 400));
+  }
+
+  user.password = newPassword;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordTime = undefined;
+
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: "Password updated successfully",
+  });
+});

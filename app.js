@@ -1,5 +1,6 @@
 const express = require("express");
 const quizRoutes = require("./routes/quizRoutes");
+
 const resultRoutes = require("./routes/resultRoutes");
 const studentRoutes = require("./routes/studentRoutes");
 const teacherRoutes = require("./routes/teacherRoutes");
@@ -9,6 +10,7 @@ const ErrorHandler = require("./middleware/error");
 const cookieParser = require("cookie-parser");
 
 const app = express();
+const errorMiddleware = require("./middleware/error");
 app.use(express.json());
 app.use(cookieParser());
 
@@ -46,11 +48,14 @@ if (process.env.NODE_ENV !== "PRODUCTION") {
 app.get("/is", (req, res) => {
   res.send("Server is running!");
 });
+const adminRoutes = require("./routes/adminRoutes");
 
 // Routes
 app.use("/api/quiz", quizRoutes);
 app.use("/api/result", resultRoutes);
 app.use("/api/auth", studentRoutes);
 app.use("/api/teacher", teacherRoutes);
+app.use("/api/admin", adminRoutes);
+app.use(errorMiddleware);
 module.exports = app;
 module.exports.handler = serverless(app);

@@ -17,20 +17,20 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, "Please enter your password"],
       minLength: [4, "Password should be greater than 4 characters"],
-      select: false, // Exclude password from being returned in queries
+      select: false,
     },
     phoneNumber: {
       type: Number,
       validate: {
         validator: function (v) {
-          return /^[0-9]{10,15}$/.test(v); // Adjust regex based on phone format
+          return /^[0-9]{10,15}$/.test(v);
         },
         message: "Please enter a valid phone number",
       },
     },
     role: {
       type: String,
-      enum: ["student", "teacher"], // Can only be either "student" or "teacher"
+      enum: ["student", "teacher", "admin"], // Added admin role
       default: "student",
     },
     avatar: {
@@ -50,13 +50,11 @@ const userSchema = new mongoose.Schema(
     resetPasswordToken: String,
     resetPasswordTime: Date,
   },
-  { timestamps: true } // Auto-manages createdAt and updatedAt
+  { timestamps: true }
 );
 
-// Hash password on save or update
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
-
   try {
     this.password = await bcrypt.hash(this.password, 10);
     next();
@@ -65,7 +63,6 @@ userSchema.pre("save", async function (next) {
   }
 });
 
-// Generate JWT token
 userSchema.methods.getJwtToken = function () {
   return jwt.sign(
     { id: this._id, role: this.role },
@@ -76,7 +73,6 @@ userSchema.methods.getJwtToken = function () {
   );
 };
 
-// Compare password
 userSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
