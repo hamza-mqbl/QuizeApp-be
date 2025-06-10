@@ -8,7 +8,7 @@ require("dotenv").config({ path: "./config/.env" });
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-// console.log("🚀 ~ process.env.OPENAI_API_KEY:", process.env.OPENAI_API_KEY);
+const { calculateDistance } = require("../utils/location"); // Import the helper
 exports.createQuiz = async (req, res, next) => {
   if (req.user.role !== "teacher") {
     return next(
@@ -17,14 +17,33 @@ exports.createQuiz = async (req, res, next) => {
   }
 
   try {
-    const { title, topic, questions, quizCode } = req.body;
-    console.log(
-      "🚀 ~ exports.createQuiz= ~ title, topic, questions, quizCode:",
+    const {
       title,
       topic,
       questions,
-      quizCode
-    );
+      quizCode,
+      description,
+      timeLimit, // ✅ NEW: Get timeLimit from request
+      enableLocationRestriction,
+      location,
+    } = req.body;
+
+    console.log("🚀 ~ Quiz creation data:", {
+      title,
+      topic,
+      questionsCount: questions?.length,
+      quizCode,
+      timeLimit, // ✅ Log timeLimit
+      enableLocationRestriction,
+      location,
+    });
+
+    // ✅ Validate timeLimit
+    if (timeLimit && (timeLimit < 1 || timeLimit > 300)) {
+      return next(
+        new ErrorHandler("Time limit must be between 1 and 300 minutes", 400)
+      );
+    }
 
     const quiz = new Quiz({
       title,
@@ -32,16 +51,83 @@ exports.createQuiz = async (req, res, next) => {
       questions,
       createdBy: req.user._id,
       quizCode,
-      isPublished: false, // ✅ default not published
+      isPublished: false,
+      description: description || "",
+      timeLimit: timeLimit || 20, // ✅ Set timeLimit with default fallback
+      enableLocationRestriction: enableLocationRestriction || false,
+      location: enableLocationRestriction ? location : undefined,
     });
 
     await quiz.save();
 
-    res.status(201).json({ success: true, quiz });
+    console.log(
+      "✅ Quiz created successfully with timeLimit:",
+      quiz.timeLimit,
+      "minutes"
+    );
+
+    res.status(201).json({
+      success: true,
+      quiz,
+      message: `Quiz created with ${quiz.timeLimit} minute time limit`,
+    });
   } catch (error) {
+    console.error("❌ Quiz creation error:", error);
     return next(new ErrorHandler(error.message, 400));
   }
 };
+// console.log("🚀 ~ process.env.OPENAI_API_KEY:", process.env.OPENAI_API_KEY);
+// exports.createQuiz = async (req, res, next) => {
+//   if (req.user.role !== "teacher") {
+//     return next(
+//       new ErrorHandler("Access denied: Only teachers can create quizzes", 403)
+//     );
+//   }
+
+//   try {
+//     const {
+//       title,
+//       topic,
+//       questions,
+//       quizCode,
+//       description,
+//       enableLocationRestriction,
+//       location,
+//     } = req.body;
+
+//     console.log(
+//       "🚀 ~ exports.createQuiz= ~ title, topic, questions, quizCode:",
+//       title,
+//       topic,
+//       questions,
+//       quizCode
+//     );
+
+//     console.log(
+//       "🚀 ~ exports.createQuiz= ~ enableLocationRestriction, location:",
+//       enableLocationRestriction,
+//       location
+//     );
+
+//     const quiz = new Quiz({
+//       title,
+//       topic,
+//       questions,
+//       createdBy: req.user._id,
+//       quizCode,
+//       isPublished: false, // ✅ default not published
+//       description: description || "",
+//       enableLocationRestriction: enableLocationRestriction || false,
+//       location: enableLocationRestriction ? location : undefined,
+//     });
+
+//     await quiz.save();
+
+//     res.status(201).json({ success: true, quiz });
+//   } catch (error) {
+//     return next(new ErrorHandler(error.message, 400));
+//   }
+// };
 exports.publishQuiz = async (req, res, next) => {
   try {
     const { quizId } = req.params;
@@ -211,18 +297,75 @@ Return only the JSON array. No explanation or extra text.
 
 exports.getQuizByCode = async (req, res, next) => {
   try {
+    const { studentLatitude, studentLongitude } = req.query;
+    console.log(
+      "🚀 ~ exports.getQuizByCode= ~ studentLatitude, studentLongitude :",
+      studentLatitude,
+      studentLongitude
+    );
     const quiz = await Quiz.findOne({
       quizCode: req.params.quizCode,
       isPublished: true,
-    }); // ✅ Only published quizzes
+    });
+
     if (!quiz) {
       return next(new ErrorHandler("Quiz not found or not published", 404));
     }
+
+    // ✅ Check location if restriction is enabled
+    if (quiz.enableLocationRestriction && quiz.location) {
+      if (!studentLatitude || !studentLongitude) {
+        return next(
+          new ErrorHandler("Location verification required for this quiz", 400)
+        );
+      }
+
+      const distance = calculateDistance(
+        parseFloat(studentLatitude),
+        parseFloat(studentLongitude),
+        quiz.location.latitude,
+        quiz.location.longitude
+      );
+      console.log("🚀 ~ exports.getQuizByCode= ~ distance:", distance);
+
+      if (distance > quiz.location.radius) {
+        return next(
+          new ErrorHandler(
+            `You must be within ${
+              quiz.location.radius
+            }m of the quiz location. You are ${Math.round(distance)}m away.`,
+            403
+          )
+        );
+      }
+
+      console.log(
+        `✅ Student location verified: ${Math.round(
+          distance
+        )}m from quiz center`
+      );
+    }
+
     res.status(200).json({ success: true, quiz });
   } catch (error) {
     return next(new ErrorHandler(error.message, 400));
   }
 };
+
+// exports.getQuizByCode = async (req, res, next) => {
+//   try {
+//     const quiz = await Quiz.findOne({
+//       quizCode: req.params.quizCode,
+//       isPublished: true,
+//     }); // ✅ Only published quizzes
+//     if (!quiz) {
+//       return next(new ErrorHandler("Quiz not found or not published", 404));
+//     }
+//     res.status(200).json({ success: true, quiz });
+//   } catch (error) {
+//     return next(new ErrorHandler(error.message, 400));
+//   }
+// };
 exports.getTeacherDashboardStats = async (req, res, next) => {
   try {
     const teacherId = req.user._id;
@@ -1022,7 +1165,7 @@ exports.getAllPublishedQuizzes = async (req, res, next) => {
       resultsPublished: false,
       isSubmit: false,
     })
-      .select("title topic questions createdAt quizCode createdBy")
+      .select("title topic questions createdAt quizCode createdBy timeLimit")
       .populate("createdBy", "name email") // Get teacher's details
       .sort({ createdAt: -1 });
 
@@ -1229,6 +1372,111 @@ exports.updatePassword = async (req, res, next) => {
       message: "Password updated successfully",
     });
   } catch (error) {
+    return next(new ErrorHandler(error.message, 500));
+  }
+};
+
+exports.getQuizResultsByQuizId = async (req, res, next) => {
+  try {
+    const { quizId } = req.params;
+
+    // Only allow teachers to view quiz results
+    if (req.user.role !== "teacher") {
+      return next(
+        new ErrorHandler(
+          "Access denied: Only teachers can view quiz results",
+          403
+        )
+      );
+    }
+
+    const quiz = await Quiz.findById(quizId)
+      .populate("createdBy", "name email")
+      .populate("submissions.studentId", "name email");
+
+    if (!quiz) {
+      return next(new ErrorHandler("Quiz not found", 404));
+    }
+
+    // Check if the teacher owns this quiz
+    if (quiz.createdBy._id.toString() !== req.user._id.toString()) {
+      return next(
+        new ErrorHandler(
+          "Unauthorized: You can only view your own quiz results",
+          403
+        )
+      );
+    }
+
+    // Structure quiz data
+    const quizData = {
+      id: quiz._id,
+      title: quiz.title,
+      topic: quiz.topic,
+      totalQuestions: quiz.questions.length,
+      totalMarks: quiz.questions.length, // Assuming 1 mark per question
+      passingMarks: Math.ceil(quiz.questions.length * 0.6), // 60% passing
+      createdAt: quiz.createdAt.toISOString().split("T")[0], // Format: YYYY-MM-DD
+      isPublished: quiz.isPublished,
+      resultsPublished: quiz.resultsPublished,
+      totalSubmissions: quiz.submissions.length,
+    };
+
+    // Structure student results
+    const studentResults = quiz.submissions.map((submission, index) => {
+      const student = submission.studentId;
+      const score = submission.score;
+      const totalMarks = quiz.questions.length;
+      const percentage = Math.round((score / totalMarks) * 100);
+
+      // Calculate time spent (if you have submission timestamp logic)
+      const timeSpent = "N/A"; // You can calculate this based on your timing logic
+
+      return {
+        id: (index + 1).toString(),
+        studentName: student?.name || "Unknown Student",
+        email: student?.email || "No email",
+        score: score,
+        totalMarks: totalMarks,
+        percentage: percentage,
+        timeSpent: timeSpent,
+        submittedAt: quiz.createdAt.toISOString(), // Using quiz creation time as fallback
+        status: percentage >= 60 ? "passed" : "failed",
+        feedback: submission.feedback || null,
+        resultPublished: submission.resultPublished,
+      };
+    });
+
+    // Calculate summary statistics
+    const summary = {
+      totalStudents: studentResults.length,
+      passedCount: studentResults.filter((r) => r.status === "passed").length,
+      failedCount: studentResults.filter((r) => r.status === "failed").length,
+      averageScore:
+        studentResults.length > 0
+          ? Math.round(
+              studentResults.reduce((sum, r) => sum + r.percentage, 0) /
+                studentResults.length
+            )
+          : 0,
+      highestScore:
+        studentResults.length > 0
+          ? Math.max(...studentResults.map((r) => r.percentage))
+          : 0,
+      lowestScore:
+        studentResults.length > 0
+          ? Math.min(...studentResults.map((r) => r.percentage))
+          : 0,
+    };
+
+    res.status(200).json({
+      success: true,
+      quiz: quizData,
+      results: studentResults,
+      summary: summary,
+    });
+  } catch (error) {
+    console.error("Error fetching quiz results:", error);
     return next(new ErrorHandler(error.message, 500));
   }
 };

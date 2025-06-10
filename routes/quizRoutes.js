@@ -79,5 +79,10 @@ router.get(
   isAuthenticated,
   quizController.getStudentResultOverview
 );
+router.get(
+  "/:quizId/result",
+  isAuthenticated,
+  quizController.getQuizResultsByQuizId
+);
 
 module.exports = router;
