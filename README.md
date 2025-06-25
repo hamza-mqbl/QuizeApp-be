@@ -1,4 +1,4 @@
-# 🧠 Machine Learning-Based Quiz System and Preparation Suggestion System – Backend
+# Machine Learning-Based Quiz System and Preparation Suggestion System – Backend
 
 This is the **backend** of an AI-powered quiz platform where teachers can create and manage quizzes, and students can securely attempt them. The system includes smart cheating prevention (e.g., tab-switch detection, location checks), and provides students with AI-generated performance feedback after results are published.
 
@@ -77,4 +77,4 @@ Advanced proctoring integrations (eye-tracking, voice monitoring)
 🙋‍♂️ Developed By
 Hamza Maqbool
 Backend Developer – MERN Stack
-🔗 LinkedIn
+[LinkedIn](https://www.linkedin.com/in/hamza-maqbool)
