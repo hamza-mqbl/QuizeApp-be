@@ -35,11 +35,11 @@ This is the **backend** of an AI-powered quiz platform where teachers can create
 # Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/quiz-app-backend.git
+git clone https://github.com/hamza-mqbl/QuizeApp-be.git
 ```
 
 ```bash
-cd quiz-app-backend
+cd QuizeApp-be
 ```
 
 # Install dependencies
