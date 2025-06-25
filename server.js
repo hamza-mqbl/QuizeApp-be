@@ -1,6 +1,5 @@
 const app = require("./app");
 const connectDatabase = require("./db/Database.js");
-const cloudinary = require("cloudinary").v2;
 // handling uncaught Execption
 
 process.on("uncaughtException", (err) => {
@@ -17,13 +16,6 @@ if (process.env.NODE_ENV !== "PRODUCTION") {
 
 // connect
 connectDatabase();
-// pre requist for deployement
-// const __dirname = path.resolve();
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 // create server
 const server = app.listen(process.env.PORT, () => {

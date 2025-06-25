@@ -167,9 +167,6 @@ exports.updateUserAvatar = catchAsyncErrors(async (req, res, next) => {
       return next(new ErrorHandler("User not found", 400));
     }
 
-    // Upload to Cloudinary (optional)
-    // const result = await cloudinary.uploader.upload(req.file.path);
-
     existUser.avatar = req.file.filename;
     await existUser.save();
 
